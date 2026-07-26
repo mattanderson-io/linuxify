@@ -1,0 +1,13 @@
+{
+  "modules": [
+    { "type": "title", "format": "devuser@Workstation-01" },
+    "separator",
+    "os", "host", "kernel", "uptime", "packages", "shell",
+    "display", "wm", "wmtheme", "theme", "font", "cursor",
+    "terminal", "terminalfont",
+    "cpu", "gpu", "memory", "swap", "disk",
+    "locale",
+    "break",
+    "colors"
+  ]
+}

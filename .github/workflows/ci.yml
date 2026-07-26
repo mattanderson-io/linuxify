@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck and Bats
+        run: brew install shellcheck bats-core
+
+      - name: ShellCheck
+        run: |
+          shellcheck linuxify tests/fake-brew
+          shellcheck --shell=sh environment.sh
+
+      - name: Bats
+        run: bats --print-output-on-failure tests/

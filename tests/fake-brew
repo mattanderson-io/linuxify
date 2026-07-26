@@ -1,0 +1,66 @@
+#!/bin/bash
+# A stand-in for Homebrew, so the test suite can exercise install and uninstall
+# without touching the machine it runs on.
+#
+# State lives under $FAKE_BREW_DIR:
+#   installed       one formula per line, the packages brew "has"
+#   installed.log   every formula passed to `brew install`
+#   uninstalled.log every formula actually passed to `brew uninstall`
+#   uses.<formula>  if present, the dependents `brew uses` should report
+#   refuse.<formula> if present, `brew uninstall` fails for that formula
+
+set -euo pipefail
+
+: "${FAKE_BREW_DIR:?FAKE_BREW_DIR must be set}"
+: "${FAKE_BREW_PREFIX:?FAKE_BREW_PREFIX must be set}"
+
+installed="$FAKE_BREW_DIR/installed"
+touch "$installed"
+
+case "${1:-}" in
+    --prefix)
+        echo "$FAKE_BREW_PREFIX"
+        ;;
+
+    ls)
+        # brew ls --versions <formula>
+        formula="${3:-}"
+        grep -qxF -- "$formula" "$installed"
+        ;;
+
+    install)
+        formula="${2:-}"
+        echo "$formula" >> "$FAKE_BREW_DIR/installed.log"
+        grep -qxF -- "$formula" "$installed" || echo "$formula" >> "$installed"
+        ;;
+
+    uninstall)
+        formula="${2:-}"
+        if [ -f "$FAKE_BREW_DIR/refuse.$formula" ]; then
+            echo "Error: refusing to uninstall $formula" >&2
+            exit 1
+        fi
+        echo "$formula" >> "$FAKE_BREW_DIR/uninstalled.log"
+        tmp="$(mktemp)"
+        grep -vxF -- "$formula" "$installed" > "$tmp" || true
+        cat "$tmp" > "$installed"
+        rm -f "$tmp"
+        ;;
+
+    uses)
+        # brew uses --installed --formula <formula>
+        formula="${4:-}"
+        if [ -f "$FAKE_BREW_DIR/uses.$formula" ]; then
+            cat "$FAKE_BREW_DIR/uses.$formula"
+        fi
+        ;;
+
+    info)
+        echo "==> ${2:-}: stable (bottled)"
+        ;;
+
+    *)
+        echo "fake-brew: unhandled invocation: $*" >&2
+        exit 1
+        ;;
+esac

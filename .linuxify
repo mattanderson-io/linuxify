@@ -62,3 +62,23 @@ export PATH="${BREW_HOME}/opt/gnu-which/libexec/gnubin:$PATH"
 export PATH="${BREW_HOME}/opt/grep/libexec/gnubin:$PATH"
 
 unset BREW_HOME
+
+# colors
+if command -v dircolors >/dev/null 2>&1; then
+    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
+fi
+
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias egrep='egrep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias diff='diff --color=auto'
+alias zgrep='zgrep --color=auto'
+alias bzgrep='bzgrep --color=auto'
+alias xzgrep='xzgrep --color=auto'
+alias zstdgrep='zstdgrep --color=auto'
+
+# less: auto-decompress gz/bz2/xz/zip/tar/etc. via lesspipe
+if command -v lesspipe.sh >/dev/null 2>&1; then
+    export LESSOPEN="|$(command -v lesspipe.sh) %s"
+fi

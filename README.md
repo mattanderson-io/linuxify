@@ -1,53 +1,72 @@
-# linuxify
+# linuxify-color
 
-Transparently transform the macOS CLI into a fresh GNU/Linux CLI experience by
+**Your Mac's terminal, but it feels like Ubuntu.**
 
-- installing missing GNU programs
-- updating outdated GNU programs
-- replacing pre-installed BSD programs with their preferred GNU implementation
-- installing other programs common among popular GNU/Linux distributions
-- coloring `ls`, `grep`/`egrep`/`fgrep`, `diff`, and the `zgrep`/`bzgrep`/`xzgrep`/`zstdgrep`
-  compressed-file variants
-- auto-decompressing `less` (gz/bz2/xz/zip/tar/etc.) via `lesspipe`
-- an Ubuntu-style colored `user@host:~/path$` prompt and colored man pages
-- a `fastfetch` system-info banner and `htop`/`tree`/`watch` for good measure
-- `zsh-autosuggestions` and `zsh-syntax-highlighting`
+macOS ships a BSD userland whose flags don't match the scripts you copy off
+Stack Overflow, and a shell that renders every last thing in the same shade of
+white. `linuxify-color` fixes both — the real GNU tools, plus the colored,
+legible terminal you've missed since you last used Linux.
 
-Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14), Sequoia (15), and Tahoe (26).
+![The macOS terminal after linuxify-color](screenshots/colors.png)
 
-![Colored GNU CLI on macOS](screenshots/colors.png)
+## What you get
+
+**The GNU userland.** `ls`, `grep`, `sed`, `find`, `awk`, `tar`, `make` and 40+
+more packages, replaced with the versions the rest of the world documents. No
+more `gsed`. No more `sed -i ''`. No more man pages that are missing the flag
+you need.
+
+**Color, everywhere it should be.**
+
+- `ls` driven by `dircolors` — directories, symlinks, archives and executables
+  all distinguishable at a glance
+- `grep` matches highlighted, right through the `zgrep`/`bzgrep`/`xzgrep`/`zstdgrep`
+  compressed variants
+- `diff` in red and green
+- man pages with colored headings and keywords
+- an Ubuntu-style green-and-blue `user@host:~/path$` prompt
+
+**The quality-of-life tools every distro ships and macOS doesn't.** `htop`,
+`tree`, `watch`, a `less` that opens compressed files without you thinking
+about it, a `fastfetch` banner on login, and `zsh-autosuggestions` +
+`zsh-syntax-highlighting` so your shell finishes your sentences and tells you
+when a command doesn't exist before you hit enter.
+
+Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14),
+Sequoia (15), and Tahoe (26).
 
 ## Install
 
 ```bash
-git clone https://github.com/mattanderson-io/linuxify.git
-cd linuxify/
+git clone https://github.com/mattanderson-io/linuxify-color.git
+cd linuxify-color/
 ./linuxify install
 ```
 
-## Usage
+Open a new terminal. That's the whole thing.
 
-The install writes two files and sources both from your `~/.zshrc`, so a new
-shell picks everything up with no further setup:
+## How it works
 
-- `~/.linuxify` updates your PATH, MANPATH, and other variables so you get the
-  GNU utilities first without needing to prepend them with `g`, and enables
-  `--color=auto` plus `lesspipe` for compressed files. Shell-agnostic.
-- `~/.linuxify.zsh` sets up the colored prompt, colored man pages, the
-  fastfetch banner, and the zsh plugins. zsh only.
+The install writes two files and sources both from your `~/.zshrc`:
 
-Your existing `~/.zshrc` is never overwritten — the two `.` lines are appended
-if missing, and a copy is kept at `~/.zshrc.linuxify.bak`. If you use bash,
-add `. ~/.linuxify` to your `~/.bashrc` yourself.
+- **`~/.linuxify`** updates your PATH, MANPATH, and friends so the GNU tools
+  come first without a `g` prefix, and switches on `--color=auto` and
+  `lesspipe`. Shell-agnostic.
+- **`~/.linuxify.zsh`** sets up the prompt, colored man pages, the fastfetch
+  banner, and the zsh plugins. zsh only.
 
-The screenshot above uses the Ubuntu font, which is not installed by the
-script. To match it:
+Your existing `~/.zshrc` is never overwritten. The two `.` lines are appended
+only if they're missing, and your original is kept at `~/.zshrc.linuxify.bak`.
+Bash users can add `. ~/.linuxify` to `~/.bashrc` by hand.
+
+The screenshot uses the Ubuntu font, which the script doesn't install. To match
+it exactly:
 
 ```bash
 brew install --cask font-ubuntu font-ubuntu-mono
 ```
 
-then pick Ubuntu Mono in Terminal → Settings → Profiles → Text.
+then choose Ubuntu Mono under Terminal → Settings → Profiles → Text.
 
 ## Uninstall
 
@@ -55,4 +74,12 @@ then pick Ubuntu Mono in Terminal → Settings → Profiles → Text.
 ./linuxify uninstall
 ```
 
-This removes both files and strips the lines it added to your `~/.zshrc`.
+Removes both files and strips the lines it added to your `~/.zshrc`.
+
+## Credits
+
+A fork of [pkill37/linuxify](https://github.com/pkill37/linuxify), which does
+the heavy lifting of installing and PATH-ordering the GNU userland. This fork
+adds the color configuration, the prompt, the compressed-file handling, and the
+shell plugins — and makes the installer set them up for you rather than leaving
+you a file to wire in yourself.

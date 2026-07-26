@@ -24,8 +24,8 @@ export LESS_TERMCAP_so=$'\e[01;33m'
 export LESS_TERMCAP_ue=$'\e[0m'
 export LESS_TERMCAP_us=$'\e[1;4;31m'
 
-# fetch banner on new interactive shells
-command -v fastfetch > /dev/null 2>&1 && fastfetch
+# fetch banner on new interactive shells; set LINUXIFY_NO_FETCH=1 to skip it
+[ -z "$LINUXIFY_NO_FETCH" ] && command -v fastfetch > /dev/null 2>&1 && fastfetch
 
 # zsh plugins (syntax-highlighting must be sourced last)
 [ -r "${BREW_HOME}/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && source "${BREW_HOME}/share/zsh-autosuggestions/zsh-autosuggestions.zsh"

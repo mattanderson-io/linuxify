@@ -531,3 +531,39 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"%n@%m"* ]]
 }
+
+# A stub ahead of any real fastfetch on PATH, so these two tests assert the
+# guard rather than whether the CI runner happens to have fastfetch installed.
+fake_fastfetch() {
+    printf '#!/bin/sh\necho BANNER_RAN\n' > "$SANDBOX/bin/fastfetch"
+    chmod +x "$SANDBOX/bin/fastfetch"
+}
+
+@test "zsh-integration.zsh runs the fetch banner by default" {
+    fake_fastfetch
+
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export PATH='$PATH'
+        source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
+    "
+    [[ "$output" == *BANNER_RAN* ]]
+}
+
+@test "zsh-integration.zsh skips the fetch banner when LINUXIFY_NO_FETCH is set" {
+    fake_fastfetch
+
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export PATH='$PATH'
+        export LINUXIFY_NO_FETCH=1
+        source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
+    "
+    [[ "$output" != *BANNER_RAN* ]]
+}

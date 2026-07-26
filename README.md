@@ -101,6 +101,30 @@ enter. Plus a `fastfetch` banner on login.
 </tr>
 </table>
 
+The banner is [`fastfetch`](https://github.com/fastfetch-cli/fastfetch), which
+picks its logo from the OS it finds itself on — hence the Apple. If it's too
+much on every new shell, trim it in `~/.config/fastfetch/config.jsonc`:
+
+```bash
+fastfetch --gen-config   # writes the file
+```
+
+```jsonc
+{
+  "logo": { "type": "small" },
+  "modules": ["title", "os", "kernel", "uptime", "shell"]
+}
+```
+
+That's a seven-line banner instead of a twenty-line one. `--logo none` drops
+the Apple, `fastfetch --list-logos` offers a few hundred alternatives
+(including Ubuntu's), and `fastfetch --list-modules` lists what else you can
+put in `modules`. Configure it there rather than with flags, because the
+banner is invoked bare and `./linuxify install` overwrites its own files.
+
+To skip the banner entirely, set `LINUXIFY_NO_FETCH=1` in your `~/.zshrc`
+above the linuxify line.
+
 Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14),
 Sequoia (15), and Tahoe (26).
 

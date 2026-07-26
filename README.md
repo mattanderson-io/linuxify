@@ -47,17 +47,36 @@ Open a new terminal. That's the whole thing.
 
 ## How it works
 
-The install writes two files and sources both from your `~/.zshrc`:
+Everything lives in one directory, `~/.config/linuxify/` (or under
+`$XDG_CONFIG_HOME` if you've moved it):
 
-- **`~/.linuxify`** updates your PATH, MANPATH, and friends so the GNU tools
+- **`environment.sh`** updates your PATH, MANPATH, and friends so the GNU tools
   come first without a `g` prefix, and switches on `--color=auto` and
   `lesspipe`. Shell-agnostic.
-- **`~/.linuxify.zsh`** sets up the prompt, colored man pages, the fastfetch
-  banner, and the zsh plugins. zsh only.
+- **`zsh-integration.zsh`** sets up the prompt, colored man pages, the fastfetch
+  banner, and the zsh plugins, and sources `environment.sh` for you. zsh only.
 
-Your existing `~/.zshrc` is never overwritten. The two `.` lines are appended
-only if they're missing, and your original is kept at `~/.zshrc.linuxify.bak`.
-Bash users can add `. ~/.linuxify` to `~/.bashrc` by hand.
+So your `~/.zshrc` gains exactly one line:
+
+```bash
+source "${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/zsh-integration.zsh"
+```
+
+Bash users add the other file to `~/.bashrc` by hand:
+
+```bash
+source "${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/environment.sh"
+```
+
+Your existing `~/.zshrc` is never overwritten. The line is appended only if
+it's missing, and your original is kept at `~/.zshrc.linuxify.bak`.
+
+Nothing here exports `LDFLAGS`, `CPPFLAGS` or `PKG_CONFIG_PATH`. Setting those
+globally would quietly make every unrelated build on your machine link against
+Homebrew's keg-only libraries, which is a miserable thing to debug. Set them
+per project instead.
+
+Your login shell is left alone.
 
 The screenshot uses the Ubuntu font, which the script doesn't install. To match
 it exactly:
@@ -74,7 +93,26 @@ then choose Ubuntu Mono under Terminal → Settings → Profiles → Text.
 ./linuxify uninstall
 ```
 
-Removes both files and strips the lines it added to your `~/.zshrc`.
+Removes `~/.config/linuxify/` and strips the line it added to your `~/.zshrc`.
+If you'd put anything else in that directory, the directory stays.
+
+**It only removes packages it installed.** The install records every formula it
+actually had to install in
+`${XDG_STATE_HOME:-~/.local/state}/linuxify/installed-formulas`, and uninstall
+works from that list. A `git`, `vim` or `python` you already had is left
+exactly where it was. Anything another package still depends on is kept too,
+and reported rather than silently skipped.
+
+## Development
+
+```bash
+brew install shellcheck bats-core
+shellcheck linuxify tests/fake-brew && shellcheck --shell=sh environment.sh
+bats tests/
+```
+
+`tests/fake-brew` stands in for Homebrew, so the suite exercises real install
+and uninstall runs without touching the machine it's running on.
 
 ## Credits
 

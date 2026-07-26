@@ -1,34 +1,51 @@
 #!/bin/bash
 set -euo pipefail
 
-# Get full CPU brand string (e.g., "Apple M1" or "Intel(R) Core(TM) i5-...")
-# This is used to detect Apple Silicon vs Intel Macs
-export CPU_BRAND_STRING="$(sysctl -n machdep.cpu.brand_string 2>/dev/null || echo 'Unknown')"
+# Where this script lives, so that `install` works from any directory.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# Uninstall must only ever remove things we installed. Everything we do to the
+# machine is recorded here so that a later `uninstall` can tell our packages
+# apart from ones the user already had.
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/linuxify"
+INSTALLED_FORMULAS="$STATE_DIR/installed-formulas"
+
+# One directory holds everything we own, rather than scattering dotfiles across
+# $HOME. Respect XDG_CONFIG_HOME: users are entitled to move it.
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/linuxify"
+
+# The single line ~/.zshrc needs. Kept unexpanded on purpose, so that it still
+# resolves correctly for a user who sets XDG_CONFIG_HOME later.
+# shellcheck disable=SC2016
+ZSHRC_LINE='source "${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/zsh-integration.zsh"'
 
 linuxify_check_os() {
-  if ! [[ "$OSTYPE" =~ darwin* ]]; then
-      echo "This is meant to be run on macOS only"
-      exit
-  fi
+    if ! [[ "$OSTYPE" =~ darwin* ]]; then
+        echo "This is meant to be run on macOS only" >&2
+        exit 1
+    fi
 }
 
 linuxify_check_brew() {
-  if ! command -v brew > /dev/null; then
-      echo "Homebrew not installed!"
-      echo "In order to use this script please install homebrew from https://brew.sh"
-      exit
-  fi
+    if ! command -v brew > /dev/null; then
+        echo "Homebrew not installed!" >&2
+        echo "In order to use this script please install homebrew from https://brew.sh" >&2
+        exit 1
+    fi
 }
 
 linuxify_set_prefix() {
-  export BREW_PREFIX="$(brew --prefix)"
+    BREW_PREFIX="$(brew --prefix)"
+    export BREW_PREFIX
 }
 
 linuxify_check_dirs() {
-    result=0
-    for dir in ${BREW_PREFIX}/bin ${BREW_PREFIX}/sbin; do
+    local result=0
+    local dir
+
+    for dir in "${BREW_PREFIX}/bin" "${BREW_PREFIX}/sbin"; do
         if [[ ! -d $dir || ! -w $dir ]]; then
-            echo "$dir must exist and be writeable"
+            echo "$dir must exist and be writeable" >&2
             result=1
         fi
     done
@@ -41,12 +58,10 @@ linuxify_formulas=(
     "watch"
     "wget"
     "wdiff"
-    # "gdb" intel only
     "autoconf"
 
     # GNU programs whose BSD counterpart is installed in macOS
     "coreutils"
-    "binutils"
     "diffutils"
     "ed"
     "findutils"
@@ -94,6 +109,38 @@ linuxify_formulas=(
     "zsh-syntax-highlighting"
 )
 
+# Note a formula we installed ourselves, so uninstall knows it may remove it.
+linuxify_record_formula() {
+    local formula="$1"
+
+    mkdir -p "$STATE_DIR"
+    if [ -f "$INSTALLED_FORMULAS" ] && grep -qxF -- "$formula" "$INSTALLED_FORMULAS"; then
+        return 0
+    fi
+
+    echo "$formula" >> "$INSTALLED_FORMULAS"
+}
+
+linuxify_forget_formula() {
+    local formula="$1"
+    local tmp
+
+    [ -f "$INSTALLED_FORMULAS" ] || return 0
+
+    tmp="$(mktemp)"
+    grep -vxF -- "$formula" "$INSTALLED_FORMULAS" > "$tmp" || true
+    cat "$tmp" > "$INSTALLED_FORMULAS"
+    rm -f "$tmp"
+}
+
+# True only for formulas this script installed. A formula the user already had
+# is not ours to remove, however GNU it happens to be.
+linuxify_owns_formula() {
+    local formula="$1"
+
+    [ -f "$INSTALLED_FORMULAS" ] && grep -qxF -- "$formula" "$INSTALLED_FORMULAS"
+}
+
 # Keep a pristine copy of a config file before we edit it for the first time.
 linuxify_backup() {
     local file="$1"
@@ -115,6 +162,23 @@ linuxify_add_line() {
     echo "$line" >> "$file"
 }
 
+# Remove a line by exact match. Matching is on fixed strings rather than a
+# regex so that the dots and braces in the line we add to ~/.zshrc cannot act
+# as wildcards and take a neighbouring line with them.
+linuxify_remove_line() {
+    local file="$1"
+    local line="$2"
+    local tmp
+
+    [ -f "$file" ] || return 0
+
+    tmp="$(mktemp)"
+    grep -vxF -- "$line" "$file" > "$tmp" || true
+    # Copy rather than move, so the file keeps its inode and permissions.
+    cat "$tmp" > "$file"
+    rm -f "$tmp"
+}
+
 # Uninstall a formula, but never at the cost of something else the user has
 # installed. Several of our formulas (zstd, xz, python, perl, ...) are also
 # dependencies of unrelated packages, and brew rightly refuses to remove those.
@@ -124,176 +188,151 @@ linuxify_uninstall_formula() {
     local formula="$1"
     local dependents
 
+    if ! linuxify_owns_formula "$formula"; then
+        return 0
+    fi
+
     if ! brew ls --versions "$formula" > /dev/null 2>&1; then
+        linuxify_forget_formula "$formula"
         return 0
     fi
 
-    dependents=$(brew uses --installed --formula "$formula" 2>/dev/null | grep -vxF "$formula" || true)
+    # Last line of defence for anyone who pointed their login shell at one of
+    # our formulas by hand: never delete the shell out from under them.
+    if [ "${SHELL:-}" = "${BREW_PREFIX}/bin/${formula}" ]; then
+        echo "Keeping $formula, it is your current login shell"
+        return 0
+    fi
+
+    dependents=$(brew uses --installed --formula "$formula" 2>/dev/null | grep -vxF -- "$formula" || true)
     if [ -n "$dependents" ]; then
-        echo "Keeping $formula, still required by: $(echo $dependents | tr '\n' ' ')"
+        echo "Keeping $formula, still required by: $(echo "$dependents" | tr '\n' ' ')"
         return 0
     fi
 
-    brew uninstall "$formula" || echo "Could not uninstall $formula, skipping"
-}
-
-linuxify_remove_line() {
-    local file="$1"
-    local line="$2"
-
-    if [ -f "$file" ]; then
-        sed -i.bak "\|^$line\$|d" "$file"
-        rm -f "$file.bak"
+    if brew uninstall "$formula"; then
+        linuxify_forget_formula "$formula"
+    else
+        echo "Could not uninstall $formula, skipping"
     fi
-}
-
-linuxify_install_gdb() {
-    if ! brew ls --versions gdb > /dev/null; then
-        echo "Installing gdb"
-        brew install gdb
-    fi
-    # gdb requires special privileges to access Mach ports.
-    # One can either codesign the binary as per https://sourceware.org/gdb/wiki/BuildingOnDarwin
-    # Or, on 10.12 Sierra or later with SIP, declare `set startup-with-shell off` in `~/.gdbinit`:
-    grep -qF 'set startup-with-shell off' ~/.gdbinit || echo 'set startup-with-shell off' | tee -a ~/.gdbinit > /dev/null
 }
 
 linuxify_install() {
-    linuxify_check_os;
-    linuxify_check_brew;
-    linuxify_set_prefix;
-    linuxify_check_dirs;
+    linuxify_check_os
+    linuxify_check_brew
+    linuxify_set_prefix
+    linuxify_check_dirs
 
-    # Install all formulas
-    for (( i=0; i<${#linuxify_formulas[@]}; i++ )); do
-        if brew ls --versions ${linuxify_formulas[i]}; then
-            echo "Found Existing ${linuxify_formulas[i]}"
+    local formula
+
+    # Install all formulas, remembering the ones that were not already here.
+    for formula in "${linuxify_formulas[@]}"; do
+        if brew ls --versions "$formula" > /dev/null 2>&1; then
+            echo "Found existing $formula, leaving it alone"
         else
-            echo "Installing ${linuxify_formulas[i]}"
-            brew install ${linuxify_formulas[i]}
+            echo "Installing $formula"
+            brew install "$formula"
+            linuxify_record_formula "$formula"
         fi
     done
 
-    # Only install gdb on Intel Macs (not supported on Apple Silicon)
-    if [[ ! $CPU_BRAND_STRING =~ ^Apple ]]; then
-        linuxify_install_gdb
-    fi
+    mkdir -p "$CONFIG_DIR"
 
-    # Offer to change shell to newly installed bash
-    read -p "Do you want to change your shell to the latest bash (Y/N)? " -n 1 -r
-    if [[ $REPLY =~ [Yy]$ ]]; then
-        grep -qF "${BREW_PREFIX}/bin/bash" /etc/shells || echo "${BREW_PREFIX}/bin/bash" | sudo tee -a /etc/shells > /dev/null
-        echo # Blank line so the password entry isn't bunched-up
-        chsh -s ${BREW_PREFIX}/bin/bash
-    else
-        echo "OK, leaving your shell as $SHELL"
-    fi
+    # PATH/MANPATH/INFOPATH, and colored output for ls/grep/diff and friends
+    linuxify_backup "$CONFIG_DIR/environment.sh"
+    install -m 0644 "$SCRIPT_DIR/environment.sh" "$CONFIG_DIR/environment.sh"
 
-
-    # Make changes to PATH/MANPATH/INFOPATH/LDFLAGS/CPPFLAGS, and turn on
-    # colored output for ls/grep/diff and friends
-    cp .linuxify ~/.linuxify
-
-    # Prompt, colored man pages, fetch banner, zsh plugins
-    cp .linuxify.zsh ~/.linuxify.zsh
+    # Prompt, colored man pages, fetch banner, zsh plugins. Sources
+    # environment.sh itself, so ~/.zshrc only needs the one line.
+    linuxify_backup "$CONFIG_DIR/zsh-integration.zsh"
+    install -m 0644 "$SCRIPT_DIR/zsh-integration.zsh" "$CONFIG_DIR/zsh-integration.zsh"
 
     linuxify_backup ~/.zshrc
-    linuxify_add_line ~/.zshrc '. ~/.linuxify'
-    linuxify_add_line ~/.zshrc '. ~/.linuxify.zsh'
-    echo "Sourced '. ~/.linuxify' and '. ~/.linuxify.zsh' from your ~/.zshrc"
-    echo "If you use bash, add '. ~/.linuxify' to your ~/.bashrc as well"
+    linuxify_add_line ~/.zshrc "$ZSHRC_LINE"
+    echo "Installed to $CONFIG_DIR and sourced from your ~/.zshrc"
+    echo "If you use bash, add this to your ~/.bashrc as well:"
+    echo "  source \"\${XDG_CONFIG_HOME:-\$HOME/.config}/linuxify/environment.sh\""
 }
 
 linuxify_uninstall() {
-    linuxify_check_os;
-    linuxify_check_brew;
-    linuxify_set_prefix;
+    linuxify_check_os
+    linuxify_check_brew
+    linuxify_set_prefix
 
-    # Remove gdb fix
-    [ -f ~/.gdbinit ] && sed -i.bak '/set startup-with-shell off/d' ~/.gdbinit && rm ~/.gdbinit.bak
+    local i file
 
-    # Offer to change default shell back to macOS default
-    # macOS 10.15 Catalina and later (including 11+ Big Sur, Monterey, Ventura, Sonoma, Sequoia): zsh
-    # macOS 10.14 Mojave and earlier: bash
-    bash_is_local=false
-    if [[ $SHELL =~ local ]]; then
-        read -p "Do you want to change your shell back to macOS default (macOS >= 10.15 Catalina ? zsh : bash) ? " -n 1 -r
-        if [[ $REPLY =~ [Yy]$ ]]; then
-            sudo sed -i.bak "|${BREW_PREFIX}/bin/bash|d" /etc/shells && sudo rm /etc/shells.bak
-            echo
-            # Get macOS version - handle both 10.x and 11+ versioning schemes
-            macos_version=$(sw_vers -productVersion)
-            major_version=$(echo "$macos_version" | awk -F. '{print $1}')
-            minor_version=$(echo "$macos_version" | awk -F. '{print $2}')
-
-            # macOS 10.15+ (Catalina) or macOS 11+ use zsh as default
-            if [[ $major_version -gt 10 ]] || [[ $major_version -eq 10 && $minor_version -gt 14 ]]; then
-                chsh -s /bin/zsh
-            else
-                chsh -s /bin/bash
-            fi
-        else
-            echo "OK, leaving your shell as $SHELL"
-            if [[ $SHELL == ${BREW_PREFIX}/bin/bash ]]; then
-                bash_is_local=true
-            fi
-        fi
-    fi
-
-    # Uninstall all formulas in reverse order
+    # Uninstall in reverse order, and only what we installed in the first place
     for (( i=${#linuxify_formulas[@]}-1; i>=0; i-- )); do
-        if [[ ${linuxify_formulas[i]} != bash ]]; then
-            linuxify_uninstall_formula $(echo "${linuxify_formulas[i]}" | cut -d ' ' -f1)
-        fi
+        linuxify_uninstall_formula "${linuxify_formulas[i]}"
     done
 
-    # Only remove bash if the user didn't elect to keep it as their shell
-    if [[ "$bash_is_local" != true ]]; then
-        linuxify_uninstall_formula bash
+    # Restore whatever was at these paths before we arrived, if anything
+    for file in "$CONFIG_DIR/environment.sh" "$CONFIG_DIR/zsh-integration.zsh"; do
+        rm -f "$file"
+        if [ -f "$file.linuxify.bak" ]; then
+            mv "$file.linuxify.bak" "$file"
+        fi
+    done
+    # Only if we left nothing of the user's behind
+    rmdir "$CONFIG_DIR" 2>/dev/null || true
+
+    linuxify_remove_line ~/.zshrc "$ZSHRC_LINE"
+
+    if [ -f "$INSTALLED_FORMULAS" ] && [ ! -s "$INSTALLED_FORMULAS" ]; then
+        rm -f "$INSTALLED_FORMULAS"
+        rmdir "$STATE_DIR" 2>/dev/null || true
     fi
 
-    # Remove changes to PATH/MANPATH/INFOPATH/LDFLAGS/CPPFLAGS
-    rm -f ~/.linuxify ~/.linuxify.zsh
-    linuxify_remove_line ~/.zshrc '. ~/.linuxify.zsh'
-    linuxify_remove_line ~/.zshrc '. ~/.linuxify'
-    echo "If you use bash, remove '. ~/.linuxify' from your ~/.bashrc too"
+    echo "If you use bash, remove the linuxify line from your ~/.bashrc too"
+    if [ -f ~/.zshrc.linuxify.bak ]; then
+        echo "Your pre-install ~/.zshrc is still at ~/.zshrc.linuxify.bak; delete it when you are happy"
+    fi
+    if [ -f "$INSTALLED_FORMULAS" ]; then
+        echo "Some formulas were kept and are still listed in $INSTALLED_FORMULAS"
+    fi
 }
 
 linuxify_info() {
-    linuxify_check_os;
-    linuxify_check_brew;
+    linuxify_check_os
+    linuxify_check_brew
 
-    for (( i=0; i<${#linuxify_formulas[@]}; i++ )); do
-        brew info $(echo "${linuxify_formulas[i]}" | cut -d ' ' -f1)
+    local formula
+
+    for formula in "${linuxify_formulas[@]}"; do
+        brew info "$formula"
         printf "\n\n===============================================================================================================================\n\n"
     done
 }
 
 linuxify_help() {
-  echo "usage: linuxify [-h] [command]";
-  echo ""
-  echo "valid commands:"
-  echo "  install    install GNU/Linux utilities"
-  echo "  uninstall  uninstall GNU/Linux utilities"
-  echo "  info       show info on GNU/Linux utilities"
-  echo ""
-  echo "optional arguments:"
-  echo "  -h, --help  show this help message and exit"
+    echo "usage: linuxify [-h] [command]"
+    echo ""
+    echo "valid commands:"
+    echo "  install    install GNU/Linux utilities"
+    echo "  uninstall  uninstall GNU/Linux utilities"
+    echo "  info       show info on GNU/Linux utilities"
+    echo ""
+    echo "optional arguments:"
+    echo "  -h, --help  show this help message and exit"
 }
 
 linuxify_main() {
-    if [ $# -eq 1 ]; then
-        case $1 in
-            "install") linuxify_install ;;
-            "uninstall") linuxify_uninstall ;;
-            "info") linuxify_info ;;
-            "-h") linuxify_help ;;
-            "--help") linuxify_help ;;
-        esac
-    else
-        linuxify_help;
-        exit
+    if [ $# -ne 1 ]; then
+        linuxify_help >&2
+        exit 2
     fi
+
+    case $1 in
+        "install") linuxify_install ;;
+        "uninstall") linuxify_uninstall ;;
+        "info") linuxify_info ;;
+        "-h" | "--help") linuxify_help ;;
+        *)
+            echo "unknown command: $1" >&2
+            linuxify_help >&2
+            exit 2
+            ;;
+    esac
 }
 
 linuxify_main "$@"

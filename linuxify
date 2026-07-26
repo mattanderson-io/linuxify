@@ -98,9 +98,16 @@ linuxify_formulas=(
     "unzip"
     "vim"
     "htop"
+    "jq"
     "tree"
     "xz"
     "zstd"
+
+    # Networking tools every distro has and macOS doesn't. iproute2mac is a
+    # reimplementation rather than a port, so `ip` covers the common
+    # subcommands and no more. mtr installs into sbin and needs sudo to run.
+    "mtr"
+    "iproute2mac"
 
     # Colored/decompressing output and shell niceties
     "lesspipe"

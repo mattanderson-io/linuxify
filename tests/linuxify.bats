@@ -23,6 +23,11 @@ setup() {
     mkdir -p "$FAKE_BREW_DIR" "$FAKE_BREW_PREFIX/bin" "$FAKE_BREW_PREFIX/sbin"
     touch "$FAKE_BREW_DIR/installed"
 
+    # environment.sh prefers an inherited HOMEBREW_PREFIX over calling
+    # `brew --prefix`, which is the point of it. CI runners export the real one,
+    # so pin it to the sandbox rather than letting the host leak in.
+    export HOMEBREW_PREFIX="$FAKE_BREW_PREFIX"
+
     # Put the fake brew ahead of anything real
     mkdir -p "$SANDBOX/bin"
     ln -sf "$REPO_ROOT/tests/fake-brew" "$SANDBOX/bin/brew"
@@ -479,6 +484,7 @@ EOF
     run zsh -c "
         unset MANPATH INFOPATH
         export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export HOMEBREW_PREFIX='$FAKE_BREW_PREFIX'
         source '$CONFIG_DIR/zsh-integration.zsh' >/dev/null 2>&1
         echo \$PATH
     "
@@ -496,6 +502,7 @@ EOF
     run zsh -c "
         unset MANPATH INFOPATH
         export XDG_CONFIG_HOME='$SANDBOX/elsewhere'
+        export HOMEBREW_PREFIX='$FAKE_BREW_PREFIX'
         source '$SANDBOX/elsewhere/linuxify/zsh-integration.zsh' >/dev/null 2>&1
         echo \$PATH
     "

@@ -25,7 +25,24 @@ export LESS_TERMCAP_ue=$'\e[0m'
 export LESS_TERMCAP_us=$'\e[1;4;31m'
 
 # fetch banner on new interactive shells; set LINUXIFY_NO_FETCH=1 to skip it
-[ -z "$LINUXIFY_NO_FETCH" ] && command -v fastfetch > /dev/null 2>&1 && fastfetch
+if [ -z "$LINUXIFY_NO_FETCH" ] && command -v fastfetch > /dev/null 2>&1; then
+    # `install --small` leaves a trimmed config here. Without it, fastfetch is
+    # invoked bare so that its own defaults and anything in
+    # ~/.config/fastfetch/ keep working as they did.
+    _lx_fetch_config="${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/fastfetch.jsonc"
+    if [ -r "$_lx_fetch_config" ]; then
+        fastfetch --config "$_lx_fetch_config"
+    else
+        fastfetch
+    fi
+    unset _lx_fetch_config
+
+    # The tag under the banner: "Powered by" out of the way in grey, the name
+    # in the same green as the prompt, and Color doing what it says. Drawn from
+    # the terminal's own 16 colors rather than a 256-color ramp, so it follows
+    # whatever theme is set instead of fighting it.
+    printf '%s\n' $'\e[90mPowered by \e[1;32mLinuxify \e[1;31mC\e[1;33mo\e[1;32ml\e[1;36mo\e[1;34mr\e[0m'
+fi
 
 # zsh plugins (syntax-highlighting must be sourced last)
 [ -r "${BREW_HOME}/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ] && source "${BREW_HOME}/share/zsh-autosuggestions/zsh-autosuggestions.zsh"

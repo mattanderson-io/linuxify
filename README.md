@@ -102,28 +102,44 @@ enter. Plus a `fastfetch` banner on login.
 </table>
 
 The banner is [`fastfetch`](https://github.com/fastfetch-cli/fastfetch), which
-picks its logo from the OS it finds itself on — hence the Apple. If it's too
-much on every new shell, trim it in `~/.config/fastfetch/config.jsonc`:
+picks its logo from the OS it finds itself on — hence the Apple. Underneath it
+sits a small `Powered by Linuxify Color` tag, in the colors this is all named
+after.
+
+Twenty lines on every new shell is a lot. If you'd rather have seven, install
+the small version:
 
 ```bash
-fastfetch --gen-config   # writes the file
+./linuxify install --small
 ```
+
+![The small fetch banner](screenshots/after/11-small-banner.png)
+
+The small Apple, who and where you are, and four facts worth re-reading. The
+config behind it is written to `~/.config/linuxify/fastfetch.jsonc` and handed
+to fastfetch explicitly, so it wins over anything in `~/.config/fastfetch/`.
 
 ```jsonc
 {
   "logo": { "type": "small" },
-  "modules": ["title", "os", "kernel", "uptime", "shell"]
+  "modules": ["title", "separator", "os", "kernel", "uptime", "shell"]
 }
 ```
 
-That's a seven-line banner instead of a twenty-line one. `--logo none` drops
-the Apple, `fastfetch --list-logos` offers a few hundred alternatives
-(including Ubuntu's), and `fastfetch --list-modules` lists what else you can
-put in `modules`. Configure it there rather than with flags, because the
-banner is invoked bare and `./linuxify install` overwrites its own files.
+Edit that file to taste — `"logo": { "type": "none" }` drops the Apple,
+`fastfetch --list-logos` offers a few hundred alternatives (including
+Ubuntu's), and `fastfetch --list-modules` lists what else can go in `modules`.
+**Your edits survive.** Once the file differs by so much as a byte from the one
+this repo ships, it's yours: neither a later `install` nor `uninstall` will
+remove it, and both say so when they leave it behind.
 
-To skip the banner entirely, set `LINUXIFY_NO_FETCH=1` in your `~/.zshrc`
-above the linuxify line.
+Without `--small` no config of ours is installed at all, `fastfetch` is invoked
+bare, and its own defaults and your `~/.config/fastfetch/config.jsonc` apply as
+usual. Re-running `./linuxify install` without the flag is how you go back:
+it takes the small config out again (unless you've edited it).
+
+To skip the banner and the tag entirely, set `LINUXIFY_NO_FETCH=1` in your
+`~/.zshrc` above the linuxify line.
 
 Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14),
 Sequoia (15), and Tahoe (26).
@@ -138,6 +154,12 @@ cd linuxify-color/
 
 Open a new terminal. That's the whole thing.
 
+Add `--small` for the seven-line fetch banner instead of the default one:
+
+```bash
+./linuxify install --small
+```
+
 ## How it works
 
 Everything lives in one directory, `~/.config/linuxify/` (or under
@@ -147,7 +169,10 @@ Everything lives in one directory, `~/.config/linuxify/` (or under
   come first without a `g` prefix, and switches on `--color=auto` and
   `lesspipe`. Shell-agnostic.
 - **`zsh-integration.zsh`** sets up the prompt, colored man pages, the fastfetch
-  banner, and the zsh plugins, and sources `environment.sh` for you. zsh only.
+  banner and its tag, and the zsh plugins, and sources `environment.sh` for you.
+  zsh only.
+- **`fastfetch.jsonc`** is the small banner, and only exists if you installed
+  with `--small`.
 
 So your `~/.zshrc` gains exactly one line:
 
@@ -219,6 +244,14 @@ captures the window. `reshoot.sh` runs the whole before/after pass, temporarily
 overriding `PROMPT` and pointing `fastfetch` at
 `screenshots/tools/fastfetch.jsonc` so no hostname or IP ends up in a public
 image, and restoring both afterwards.
+
+The two banner shots — the one at the top of this README and the small one
+above — come from `reshoot-banner.sh` instead. `shot.sh` clears the screen
+before running its command, which is the wrong thing entirely when the banner
+*is* the subject, so `shot-banner.sh` sizes the window first and only then
+starts the shell that draws it. That pass stages this repo's own
+`zsh-integration.zsh` into `~/.config/linuxify/`, shoots, and puts `~/.zshrc`,
+`~/.config/linuxify/` and `~/.config/fastfetch/` back as it found them.
 
 ## Credits
 

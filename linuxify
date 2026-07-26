@@ -19,6 +19,10 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/linuxify"
 # shellcheck disable=SC2016
 ZSHRC_LINE='source "${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/zsh-integration.zsh"'
 
+# Set by --small. Its only effect is which fetch banner you get; see
+# linuxify_install.
+LINUXIFY_SMALL=0
+
 linuxify_check_os() {
     if ! [[ "$OSTYPE" =~ darwin* ]]; then
         echo "This is meant to be run on macOS only" >&2
@@ -149,12 +153,51 @@ linuxify_owns_formula() {
 }
 
 # Keep a pristine copy of a config file before we edit it for the first time.
+#
+# An optional second argument names the file we are about to install over it.
+# If the two are already identical then what is on disk is our own copy from an
+# earlier install, and there is nothing of the user's to preserve. Backing it up
+# regardless would be worse than useless: uninstall would find the .bak, treat
+# our file as the user's, and put it back — leaving the machine linuxified after
+# an uninstall that reported success.
 linuxify_backup() {
     local file="$1"
+    local source="${2:-}"
 
-    if [ -f "$file" ] && [ ! -f "$file.linuxify.bak" ]; then
-        cp "$file" "$file.linuxify.bak"
+    if [ ! -f "$file" ] || [ -f "$file.linuxify.bak" ]; then
+        return 0
     fi
+
+    if [ -n "$source" ] && cmp -s "$file" "$source"; then
+        return 0
+    fi
+
+    cp "$file" "$file.linuxify.bak"
+}
+
+# Take one of our files back out, putting back whatever the user had at that
+# path before we first arrived, if anything.
+linuxify_restore() {
+    local file="$1"
+
+    rm -f "$file"
+    if [ -f "$file.linuxify.bak" ]; then
+        mv "$file.linuxify.bak" "$file"
+    fi
+}
+
+# Remove the fetch banner config, but only our own copy of it. A config that
+# differs from the one this repo ships is either hand-written or edited, and
+# either way it is the user's; `cmp` is the whole difference between the two.
+linuxify_remove_fetch_config() {
+    local file="$CONFIG_DIR/fastfetch.jsonc"
+
+    if [ -f "$file" ] && ! cmp -s "$file" "$SCRIPT_DIR/fastfetch-small.jsonc"; then
+        echo "Keeping $file, it is not the one we installed"
+        return 0
+    fi
+
+    linuxify_restore "$file"
 }
 
 # Append a line to a shell config file unless it is already present.
@@ -246,13 +289,27 @@ linuxify_install() {
     mkdir -p "$CONFIG_DIR"
 
     # PATH/MANPATH/INFOPATH, and colored output for ls/grep/diff and friends
-    linuxify_backup "$CONFIG_DIR/environment.sh"
+    linuxify_backup "$CONFIG_DIR/environment.sh" "$SCRIPT_DIR/environment.sh"
     install -m 0644 "$SCRIPT_DIR/environment.sh" "$CONFIG_DIR/environment.sh"
 
     # Prompt, colored man pages, fetch banner, zsh plugins. Sources
     # environment.sh itself, so ~/.zshrc only needs the one line.
-    linuxify_backup "$CONFIG_DIR/zsh-integration.zsh"
+    linuxify_backup "$CONFIG_DIR/zsh-integration.zsh" "$SCRIPT_DIR/zsh-integration.zsh"
     install -m 0644 "$SCRIPT_DIR/zsh-integration.zsh" "$CONFIG_DIR/zsh-integration.zsh"
+
+    # The fetch banner. --small installs a trimmed fastfetch config that
+    # zsh-integration.zsh then points fastfetch at; with no flag there is no
+    # config of ours at all, so fastfetch keeps its own defaults and whatever
+    # the user has configured for it. A plain install after a --small one takes
+    # the small config back out again, rather than leaving the flag silently
+    # latched on forever.
+    if [ "$LINUXIFY_SMALL" -eq 1 ]; then
+        echo "Installing the small fetch banner"
+        linuxify_backup "$CONFIG_DIR/fastfetch.jsonc" "$SCRIPT_DIR/fastfetch-small.jsonc"
+        install -m 0644 "$SCRIPT_DIR/fastfetch-small.jsonc" "$CONFIG_DIR/fastfetch.jsonc"
+    else
+        linuxify_remove_fetch_config
+    fi
 
     linuxify_backup ~/.zshrc
     linuxify_add_line ~/.zshrc "$ZSHRC_LINE"
@@ -275,11 +332,9 @@ linuxify_uninstall() {
 
     # Restore whatever was at these paths before we arrived, if anything
     for file in "$CONFIG_DIR/environment.sh" "$CONFIG_DIR/zsh-integration.zsh"; do
-        rm -f "$file"
-        if [ -f "$file.linuxify.bak" ]; then
-            mv "$file.linuxify.bak" "$file"
-        fi
+        linuxify_restore "$file"
     done
+    linuxify_remove_fetch_config
     # Only if we left nothing of the user's behind
     rmdir "$CONFIG_DIR" 2>/dev/null || true
 
@@ -312,7 +367,7 @@ linuxify_info() {
 }
 
 linuxify_help() {
-    echo "usage: linuxify [-h] [command]"
+    echo "usage: linuxify [-h] [--small] [command]"
     echo ""
     echo "valid commands:"
     echo "  install    install GNU/Linux utilities"
@@ -321,24 +376,57 @@ linuxify_help() {
     echo ""
     echo "optional arguments:"
     echo "  -h, --help  show this help message and exit"
+    echo "  --small     use the small fetch banner (install only)"
 }
 
 linuxify_main() {
-    if [ $# -ne 1 ]; then
+    local command=""
+
+    while [ $# -gt 0 ]; do
+        case $1 in
+            "install" | "uninstall" | "info")
+                if [ -n "$command" ]; then
+                    echo "only one command at a time: $command, $1" >&2
+                    linuxify_help >&2
+                    exit 2
+                fi
+                command="$1"
+                ;;
+            "--small") LINUXIFY_SMALL=1 ;;
+            "-h" | "--help")
+                linuxify_help
+                return 0
+                ;;
+            -*)
+                echo "unknown option: $1" >&2
+                linuxify_help >&2
+                exit 2
+                ;;
+            *)
+                echo "unknown command: $1" >&2
+                linuxify_help >&2
+                exit 2
+                ;;
+        esac
+        shift
+    done
+
+    if [ -z "$command" ]; then
         linuxify_help >&2
         exit 2
     fi
 
-    case $1 in
+    # Refused rather than ignored: a flag that quietly does nothing is worse
+    # than one that tells you where it belongs.
+    if [ "$LINUXIFY_SMALL" -eq 1 ] && [ "$command" != "install" ]; then
+        echo "--small applies to install only" >&2
+        exit 2
+    fi
+
+    case $command in
         "install") linuxify_install ;;
         "uninstall") linuxify_uninstall ;;
         "info") linuxify_info ;;
-        "-h" | "--help") linuxify_help ;;
-        *)
-            echo "unknown command: $1" >&2
-            linuxify_help >&2
-            exit 2
-            ;;
     esac
 }
 

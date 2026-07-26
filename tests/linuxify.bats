@@ -347,6 +347,47 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "repeated installation does not mistake our own files for the user's" {
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    # Nothing of the user's was here to back up on either pass
+    [ ! -e "$CONFIG_DIR/environment.sh.linuxify.bak" ]
+    [ ! -e "$CONFIG_DIR/zsh-integration.zsh.linuxify.bak" ]
+}
+
+@test "uninstall after repeated installation leaves nothing behind" {
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+
+    run "$REPO_ROOT/linuxify" uninstall
+    [ "$status" -eq 0 ]
+
+    # The second install must not have "backed up" the first install's files,
+    # or uninstall would restore them and report success having changed nothing
+    [ ! -e "$CONFIG_DIR" ]
+}
+
+@test "a file the user edited after install is still treated as theirs" {
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+    echo "# my own line" >> "$CONFIG_DIR/environment.sh"
+
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+    run grep -qxF "# my own line" "$CONFIG_DIR/environment.sh.linuxify.bak"
+    [ "$status" -eq 0 ]
+
+    run "$REPO_ROOT/linuxify" uninstall
+    [ "$status" -eq 0 ]
+    run grep -qxF "# my own line" "$CONFIG_DIR/environment.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "uninstall without a prior install removes nothing" {
     preinstall git vim coreutils gawk
 
@@ -532,10 +573,12 @@ EOF
     [[ "$output" == *"%n@%m"* ]]
 }
 
-# A stub ahead of any real fastfetch on PATH, so these two tests assert the
-# guard rather than whether the CI runner happens to have fastfetch installed.
+# A stub ahead of any real fastfetch on PATH, so these tests assert the guard
+# rather than whether the CI runner happens to have fastfetch installed. It
+# echoes its arguments too, which is how the banner-config tests below tell a
+# bare invocation from one pointed at our config.
 fake_fastfetch() {
-    printf '#!/bin/sh\necho BANNER_RAN\n' > "$SANDBOX/bin/fastfetch"
+    printf '#!/bin/sh\necho "BANNER_RAN $*"\n' > "$SANDBOX/bin/fastfetch"
     chmod +x "$SANDBOX/bin/fastfetch"
 }
 
@@ -566,4 +609,185 @@ fake_fastfetch() {
         source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
     "
     [[ "$output" != *BANNER_RAN* ]]
+    [[ "$output" != *"Powered by"* ]]
+}
+
+@test "the banner carries the Powered by Linuxify Color tag" {
+    fake_fastfetch
+
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export PATH='$PATH'
+        source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
+    "
+    [[ "$output" == *"Powered by "* ]]
+
+    # and it is colored: the name in the prompt's green, and Color one letter
+    # at a time
+    [[ "$output" == *$'\e[1;32mLinuxify'* ]]
+    [[ "$output" == *$'\e[1;31mC'* ]]
+}
+
+@test "no fastfetch means no banner and no tag" {
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    # No stub, and a PATH with no real fastfetch on it either
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export HOMEBREW_PREFIX='$FAKE_BREW_PREFIX'
+        export PATH='/usr/bin:/bin'
+        source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
+    "
+    [[ "$output" != *"Powered by"* ]]
+}
+
+@test "install --small installs the small fetch banner config" {
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+
+    run diff -q "$REPO_ROOT/fastfetch-small.jsonc" "$CONFIG_DIR/fastfetch.jsonc"
+    [ "$status" -eq 0 ]
+}
+
+@test "--small may come before the command" {
+    run "$REPO_ROOT/linuxify" --small install
+    [ "$status" -eq 0 ]
+
+    [ -f "$CONFIG_DIR/fastfetch.jsonc" ]
+}
+
+@test "a plain install installs no banner config at all" {
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    # fastfetch is left to its own defaults, and to ~/.config/fastfetch
+    [ ! -e "$CONFIG_DIR/fastfetch.jsonc" ]
+}
+
+@test "a plain install takes an earlier --small config back out" {
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+    [ -f "$CONFIG_DIR/fastfetch.jsonc" ]
+
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+    [ ! -e "$CONFIG_DIR/fastfetch.jsonc" ]
+}
+
+@test "an edited banner config is never removed" {
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+    echo '// mine' >> "$CONFIG_DIR/fastfetch.jsonc"
+
+    # not by a plain install
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+    run grep -qxF '// mine' "$CONFIG_DIR/fastfetch.jsonc"
+    [ "$status" -eq 0 ]
+
+    # and not by uninstall either
+    run "$REPO_ROOT/linuxify" uninstall
+    [ "$status" -eq 0 ]
+    run grep -qxF '// mine' "$CONFIG_DIR/fastfetch.jsonc"
+    [ "$status" -eq 0 ]
+}
+
+@test "uninstall removes the small banner config it installed" {
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+
+    run "$REPO_ROOT/linuxify" uninstall
+    [ "$status" -eq 0 ]
+
+    [ ! -e "$CONFIG_DIR/fastfetch.jsonc" ]
+    [ ! -e "$CONFIG_DIR" ]
+}
+
+@test "a pre-existing fastfetch.jsonc is backed up and restored" {
+    mkdir -p "$CONFIG_DIR"
+    echo "user's own banner" > "$CONFIG_DIR/fastfetch.jsonc"
+
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+    run grep -qxF "user's own banner" "$CONFIG_DIR/fastfetch.jsonc.linuxify.bak"
+    [ "$status" -eq 0 ]
+
+    run "$REPO_ROOT/linuxify" uninstall
+    [ "$status" -eq 0 ]
+    run grep -qxF "user's own banner" "$CONFIG_DIR/fastfetch.jsonc"
+    [ "$status" -eq 0 ]
+}
+
+@test "zsh-integration.zsh points fastfetch at the small config when there is one" {
+    fake_fastfetch
+
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export PATH='$PATH'
+        source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
+    "
+    [[ "$output" == *"BANNER_RAN --config $CONFIG_DIR/fastfetch.jsonc"* ]]
+}
+
+@test "zsh-integration.zsh invokes fastfetch bare when there is no config of ours" {
+    fake_fastfetch
+
+    run "$REPO_ROOT/linuxify" install
+    [ "$status" -eq 0 ]
+
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export PATH='$PATH'
+        source '$CONFIG_DIR/zsh-integration.zsh' 2>/dev/null
+    "
+    [[ "$output" == *BANNER_RAN* ]]
+    [[ "$output" != *--config* ]]
+}
+
+@test "zsh-integration.zsh leaves no helper variables behind" {
+    fake_fastfetch
+
+    run "$REPO_ROOT/linuxify" install --small
+    [ "$status" -eq 0 ]
+
+    run zsh -c "
+        export XDG_CONFIG_HOME='$XDG_CONFIG_HOME'
+        export PATH='$PATH'
+        source '$CONFIG_DIR/zsh-integration.zsh' > /dev/null 2>&1
+        echo \"[\${_lx_fetch_config:-}][\${BREW_HOME:-}]\"
+    "
+    [ "$status" -eq 0 ]
+    [ "$output" = "[][]" ]
+}
+
+@test "--small is refused for anything but install" {
+    run "$REPO_ROOT/linuxify" uninstall --small
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"install only"* ]]
+
+    run "$REPO_ROOT/linuxify" info --small
+    [ "$status" -eq 2 ]
+}
+
+@test "an unknown option exits nonzero" {
+    run "$REPO_ROOT/linuxify" install --smell
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"unknown option"* ]]
+
+    # and nothing was installed on the way to finding out
+    [ ! -e "$CONFIG_DIR/environment.sh" ]
+}
+
+@test "two commands at once exits nonzero" {
+    run "$REPO_ROOT/linuxify" install uninstall
+    [ "$status" -eq 2 ]
+
+    [ ! -e "$CONFIG_DIR/environment.sh" ]
 }

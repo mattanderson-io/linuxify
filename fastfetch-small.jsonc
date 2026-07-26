@@ -1,0 +1,21 @@
+// The small fetch banner, installed by `./linuxify install --small` to
+// ${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/fastfetch.jsonc.
+//
+// Seven lines instead of twenty: the small Apple logo, and the handful of
+// modules worth re-reading every time a terminal opens. `fastfetch
+// --list-modules` lists the rest if you want them back.
+//
+// Edit this freely. A copy that differs from the one this repo ships is
+// treated as yours, and neither `install` nor `uninstall` will remove it.
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": { "type": "small" },
+  "modules": [
+    "title",
+    "separator",
+    "os",
+    "kernel",
+    "uptime",
+    "shell"
+  ]
+}

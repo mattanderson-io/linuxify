@@ -1,0 +1,13 @@
+// The shipped small banner (../../fastfetch-small.jsonc) with one change: a
+// fixed title, so that no real hostname ends up in a public screenshot.
+{
+  "logo": { "type": "small" },
+  "modules": [
+    { "type": "title", "format": "devuser@Workstation-01" },
+    "separator",
+    "os",
+    "kernel",
+    "uptime",
+    "shell"
+  ]
+}

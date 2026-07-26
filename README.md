@@ -27,18 +27,32 @@ cd linuxify/
 
 ## Usage
 
-At the end of the install, files at `~/.linuxify` and `~/.zshrc` will be provided.
+The install writes two files and sources both from your `~/.zshrc`, so a new
+shell picks everything up with no further setup:
 
 - `~/.linuxify` updates your PATH, MANPATH, and other variables so you get the
   GNU utilities first without needing to prepend them with `g`, and enables
-  `--color=auto` plus `lesspipe` for compressed files.
-- `~/.zshrc` sets up the colored prompt, colored man pages, the fastfetch
-  banner, and the zsh plugins.
+  `--color=auto` plus `lesspipe` for compressed files. Shell-agnostic.
+- `~/.linuxify.zsh` sets up the colored prompt, colored man pages, the
+  fastfetch banner, and the zsh plugins. zsh only.
 
-Source both (or open a new shell) to pick up the changes.
+Your existing `~/.zshrc` is never overwritten — the two `.` lines are appended
+if missing, and a copy is kept at `~/.zshrc.linuxify.bak`. If you use bash,
+add `. ~/.linuxify` to your `~/.bashrc` yourself.
+
+The screenshot above uses the Ubuntu font, which is not installed by the
+script. To match it:
+
+```bash
+brew install --cask font-ubuntu font-ubuntu-mono
+```
+
+then pick Ubuntu Mono in Terminal → Settings → Profiles → Text.
 
 ## Uninstall
 
 ```bash
 ./linuxify uninstall
 ```
+
+This removes both files and strips the lines it added to your `~/.zshrc`.

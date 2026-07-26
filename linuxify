@@ -82,7 +82,48 @@ linuxify_formulas=(
     "rsync"
     "unzip"
     "vim"
+    "htop"
+    "tree"
+    "xz"
+    "zstd"
+
+    # Colored/decompressing output and shell niceties
+    "lesspipe"
+    "fastfetch"
+    "zsh-autosuggestions"
+    "zsh-syntax-highlighting"
 )
+
+# Keep a pristine copy of a config file before we edit it for the first time.
+linuxify_backup() {
+    local file="$1"
+
+    if [ -f "$file" ] && [ ! -f "$file.linuxify.bak" ]; then
+        cp "$file" "$file.linuxify.bak"
+    fi
+}
+
+# Append a line to a shell config file unless it is already present.
+linuxify_add_line() {
+    local file="$1"
+    local line="$2"
+
+    if [ -f "$file" ] && grep -qxF -- "$line" "$file"; then
+        return 0
+    fi
+
+    echo "$line" >> "$file"
+}
+
+linuxify_remove_line() {
+    local file="$1"
+    local line="$2"
+
+    if [ -f "$file" ]; then
+        sed -i.bak "\|^$line\$|d" "$file"
+        rm -f "$file.bak"
+    fi
+}
 
 linuxify_install_gdb() {
     if ! brew ls --versions gdb > /dev/null; then
@@ -127,9 +168,18 @@ linuxify_install() {
     fi
 
 
-    # Make changes to PATH/MANPATH/INFOPATH/LDFLAGS/CPPFLAGS
+    # Make changes to PATH/MANPATH/INFOPATH/LDFLAGS/CPPFLAGS, and turn on
+    # colored output for ls/grep/diff and friends
     cp .linuxify ~/.linuxify
-    echo "Add '. ~/.linuxify' to your ~/.bashrc, ~/.zshrc or your shell's equivalent config file"
+
+    # Prompt, colored man pages, fetch banner, zsh plugins
+    cp .linuxify.zsh ~/.linuxify.zsh
+
+    linuxify_backup ~/.zshrc
+    linuxify_add_line ~/.zshrc '. ~/.linuxify'
+    linuxify_add_line ~/.zshrc '. ~/.linuxify.zsh'
+    echo "Sourced '. ~/.linuxify' and '. ~/.linuxify.zsh' from your ~/.zshrc"
+    echo "If you use bash, add '. ~/.linuxify' to your ~/.bashrc as well"
 }
 
 linuxify_uninstall() {
@@ -181,8 +231,10 @@ linuxify_uninstall() {
     fi
 
     # Remove changes to PATH/MANPATH/INFOPATH/LDFLAGS/CPPFLAGS
-    rm -f ~/.linuxify
-    echo "Remove '. ~/.linuxify' from your ~/.bashrc, ~/.zshrc or your shell's equivalent config file"
+    rm -f ~/.linuxify ~/.linuxify.zsh
+    linuxify_remove_line ~/.zshrc '. ~/.linuxify.zsh'
+    linuxify_remove_line ~/.zshrc '. ~/.linuxify'
+    echo "If you use bash, remove '. ~/.linuxify' from your ~/.bashrc too"
 }
 
 linuxify_info() {

@@ -115,6 +115,28 @@ linuxify_add_line() {
     echo "$line" >> "$file"
 }
 
+# Uninstall a formula, but never at the cost of something else the user has
+# installed. Several of our formulas (zstd, xz, python, perl, ...) are also
+# dependencies of unrelated packages, and brew rightly refuses to remove those.
+# A refusal must not abort the whole uninstall, so failures are reported and
+# skipped rather than propagated.
+linuxify_uninstall_formula() {
+    local formula="$1"
+    local dependents
+
+    if ! brew ls --versions "$formula" > /dev/null 2>&1; then
+        return 0
+    fi
+
+    dependents=$(brew uses --installed --formula "$formula" 2>/dev/null | grep -vxF "$formula" || true)
+    if [ -n "$dependents" ]; then
+        echo "Keeping $formula, still required by: $(echo $dependents | tr '\n' ' ')"
+        return 0
+    fi
+
+    brew uninstall "$formula" || echo "Could not uninstall $formula, skipping"
+}
+
 linuxify_remove_line() {
     local file="$1"
     local line="$2"
@@ -221,13 +243,13 @@ linuxify_uninstall() {
     # Uninstall all formulas in reverse order
     for (( i=${#linuxify_formulas[@]}-1; i>=0; i-- )); do
         if [[ ${linuxify_formulas[i]} != bash ]]; then
-            brew uninstall -f $(echo "${linuxify_formulas[i]}" | cut -d ' ' -f1)
+            linuxify_uninstall_formula $(echo "${linuxify_formulas[i]}" | cut -d ' ' -f1)
         fi
     done
 
     # Only remove bash if the user didn't elect to keep it as their shell
     if [[ "$bash_is_local" != true ]]; then
-        brew uninstall bash
+        linuxify_uninstall_formula bash
     fi
 
     # Remove changes to PATH/MANPATH/INFOPATH/LDFLAGS/CPPFLAGS

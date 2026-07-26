@@ -412,6 +412,15 @@ EOF
     done
 }
 
+@test "environment.sh puts both bin and sbin on PATH, bin first" {
+    # sbin is where formulas like mtr install their binaries
+    run bash -c "unset MANPATH INFOPATH; HOMEBREW_PREFIX='$FAKE_BREW_PREFIX' . '$REPO_ROOT/environment.sh' >/dev/null 2>&1; echo \"\$PATH\""
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"$FAKE_BREW_PREFIX/bin"* ]]
+    [[ "$output" == *"$FAKE_BREW_PREFIX/sbin"* ]]
+    [[ "$output" == "$FAKE_BREW_PREFIX/bin:$FAKE_BREW_PREFIX/sbin:"* ]]
+}
+
 @test "environment.sh does not add directories that do not exist" {
     # Scoped to the sandbox prefix: the machine running the tests may well have
     # its own gnubin directories on PATH already.

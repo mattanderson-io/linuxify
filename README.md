@@ -27,10 +27,14 @@ you need.
 - an Ubuntu-style green-and-blue `user@host:~/path$` prompt
 
 **The quality-of-life tools every distro ships and macOS doesn't.** `htop`,
-`tree`, `watch`, a `less` that opens compressed files without you thinking
-about it, a `fastfetch` banner on login, and `zsh-autosuggestions` +
-`zsh-syntax-highlighting` so your shell finishes your sentences and tells you
-when a command doesn't exist before you hit enter.
+`tree`, `watch`, `jq`, `mtr`, `ip`, a `less` that opens compressed files
+without you thinking about it, a `fastfetch` banner on login, and
+`zsh-autosuggestions` + `zsh-syntax-highlighting` so your shell finishes your
+sentences and tells you when a command doesn't exist before you hit enter.
+
+Two caveats on the networking pair: `mtr` needs `sudo` to open raw sockets, and
+`ip` comes from `iproute2mac`, which is a reimplementation rather than a port —
+it covers the subcommands you reach for daily and not much beyond them.
 
 Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14),
 Sequoia (15), and Tahoe (26).

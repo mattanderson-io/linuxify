@@ -35,7 +35,9 @@ linuxify_prepend() {
     fi
 }
 
-# most programs
+# most programs. sbin before bin so that bin ends up first, matching the order
+# `brew shellenv` uses. sbin matters for the likes of mtr, which installs there.
+linuxify_prepend PATH "${BREW_HOME}/sbin"
 linuxify_prepend PATH "${BREW_HOME}/bin"
 linuxify_prepend MANPATH "${BREW_HOME}/share/man"
 linuxify_prepend INFOPATH "${BREW_HOME}/share/info"

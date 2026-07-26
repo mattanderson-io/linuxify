@@ -1,7 +1,16 @@
-# zsh-only companion to ~/.linuxify
-# Prompt, colored man pages, fetch banner, and shell plugins.
+# zsh half of linuxify-color: prompt, colored man pages, fetch banner, plugins.
+# Installed to ${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/zsh-integration.zsh
+# and sourced from ~/.zshrc. This is the only file ~/.zshrc needs to know
+# about; the shared, shell-agnostic half is pulled in from here.
 
-BREW_HOME=$(brew --prefix)
+source "${XDG_CONFIG_HOME:-$HOME/.config}/linuxify/environment.sh"
+
+# environment.sh exports this; fall back for anyone sourcing this file alone.
+BREW_HOME="${HOMEBREW_PREFIX:-$(brew --prefix)}"
+
+# Belt and braces against a PATH that grows in nested shells.
+typeset -U path PATH
+typeset -U manpath MANPATH
 
 # Ubuntu-style colored prompt: user@host:~/path$
 PROMPT=$'%B%F{green}%n@%m%f%b:%B%F{blue}%~%f%b%(!.#.$) '

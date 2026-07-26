@@ -11,30 +11,95 @@ legible terminal you've missed since you last used Linux.
 
 ## What you get
 
-**The GNU userland.** `ls`, `grep`, `sed`, `find`, `awk`, `tar`, `make` and 40+
-more packages, replaced with the versions the rest of the world documents. No
-more `gsed`. No more `sed -i ''`. No more man pages that are missing the flag
-you need.
+### The GNU userland
 
-**Color, everywhere it should be.**
+`ls`, `grep`, `sed`, `find`, `awk`, `tar`, `make` and 40+ more packages,
+replaced with the versions the rest of the world documents. No more `gsed`. No
+more `sed -i ''`. No more man pages missing the flag you need.
 
-- `ls` driven by `dircolors` — directories, symlinks, archives and executables
-  all distinguishable at a glance
-- `grep` matches highlighted, right through the `zgrep`/`bzgrep`/`xzgrep`/`zstdgrep`
-  compressed variants
-- `diff` in red and green
-- man pages with colored headings and keywords
-- an Ubuntu-style green-and-blue `user@host:~/path$` prompt
+<table>
+<tr><th width="50%">Stock macOS</th><th width="50%">With linuxify-color</th></tr>
+<tr>
+<td><img src="screenshots/before/06-gnu-flags.png" alt="BSD sed, find and date rejecting GNU flags"></td>
+<td><img src="screenshots/after/06-gnu-flags.png" alt="GNU sed, find and date accepting the same flags"></td>
+</tr>
+</table>
 
-**The quality-of-life tools every distro ships and macOS doesn't.** `htop`,
-`tree`, `watch`, `jq`, `mtr`, `ip`, a `less` that opens compressed files
-without you thinking about it, a `fastfetch` banner on login, and
-`zsh-autosuggestions` + `zsh-syntax-highlighting` so your shell finishes your
-sentences and tells you when a command doesn't exist before you hit enter.
+Same three commands. On the left, `sed -i` needs an argument it didn't get,
+`find` has never heard of `-printf`, and `date` has no `-d` — note that
+`head -1` still prints `alpha`, because the in-place edit silently didn't
+happen. On the right they just work.
+
+### Color, everywhere it should be
+
+`ls` driven by `dircolors`, so directories, symlinks, archives and executables
+are distinguishable at a glance — and a broken symlink announces itself.
+
+<table>
+<tr><th width="50%">Stock macOS</th><th width="50%">With linuxify-color</th></tr>
+<tr>
+<td><img src="screenshots/before/01b-ls-plain.png" alt="Monochrome ls output"></td>
+<td><img src="screenshots/after/01b-ls-plain.png" alt="ls output colored by file type"></td>
+</tr>
+</table>
+
+Man pages get colored headings and keywords. You also get the GNU page rather
+than the BSD one, which is usually the page you were actually looking for.
+
+<table>
+<tr><th width="50%">Stock macOS</th><th width="50%">With linuxify-color</th></tr>
+<tr>
+<td><img src="screenshots/before/04-man.png" alt="Monochrome BSD man page"></td>
+<td><img src="screenshots/after/04-man.png" alt="Colored GNU man page"></td>
+</tr>
+</table>
+
+Also colored: `grep` matches — right through the
+`zgrep`/`bzgrep`/`xzgrep`/`zstdgrep` compressed variants — `diff` in red and
+green, and an Ubuntu-style green-and-blue `user@host:~/path$` prompt.
+
+### A `less` that reads compressed files
+
+`lesspipe` means archives open as archives instead of as a dare.
+
+<table>
+<tr><th width="50%">Stock macOS</th><th width="50%">With linuxify-color</th></tr>
+<tr>
+<td><img src="screenshots/before/05-lesspipe.png" alt="less asking whether to view a binary file"></td>
+<td><img src="screenshots/after/05-lesspipe.png" alt="less listing the contents of the archive"></td>
+</tr>
+</table>
+
+### The tools every distro ships and macOS doesn't
+
+`htop`, `tree`, `watch`, `mtr`, and `ip`.
+
+<table>
+<tr><th width="50%">Stock macOS</th><th width="50%">With linuxify-color</th></tr>
+<tr>
+<td><img src="screenshots/before/07-tools.png" alt="tree, ip and htop all not found"></td>
+<td><img src="screenshots/after/07-tools.png" alt="tree, ip and htop all working"></td>
+</tr>
+</table>
 
 Two caveats on the networking pair: `mtr` needs `sudo` to open raw sockets, and
 `ip` comes from `iproute2mac`, which is a reimplementation rather than a port —
-it covers the subcommands you reach for daily and not much beyond them.
+it covers the subcommands you reach for daily and not much beyond them. You
+also get a newer `jq` than the 1.7.1 Apple now ships.
+
+### A shell that helps
+
+`zsh-autosuggestions` finishes your sentences from history, and
+`zsh-syntax-highlighting` tells you a command doesn't exist before you hit
+enter. Plus a `fastfetch` banner on login.
+
+<table>
+<tr><th width="50%">Suggestion from history, in grey</th><th width="50%">A typo, caught before enter</th></tr>
+<tr>
+<td><img src="screenshots/after/09-autosuggest.png" alt="grep in green with the rest of the command suggested in grey"></td>
+<td><img src="screenshots/after/09b-syntax.png" alt="a mistyped command shown in red"></td>
+</tr>
+</table>
 
 Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14),
 Sequoia (15), and Tahoe (26).
@@ -107,6 +172,11 @@ works from that list. A `git`, `vim` or `python` you already had is left
 exactly where it was. Anything another package still depends on is kept too,
 and reported rather than silently skipped.
 
+You can watch it decide — re-running the install on a machine that already has
+these packages touches nothing:
+
+![Install reporting that every existing package is being left alone](screenshots/after/10-idempotent.png)
+
 ## Development
 
 ```bash
@@ -117,6 +187,14 @@ bats tests/
 
 `tests/fake-brew` stands in for Homebrew, so the suite exercises real install
 and uninstall runs without touching the machine it's running on.
+
+The screenshots are reproducible. `screenshots/tools/demo-scene.sh` builds the
+fixed `~/demo` directory every shot uses, and
+`screenshots/tools/shot.sh <out.png> <rows> <command>` drives Terminal and
+captures the window. `reshoot.sh` runs the whole before/after pass, temporarily
+overriding `PROMPT` and pointing `fastfetch` at
+`screenshots/tools/fastfetch.jsonc` so no hostname or IP ends up in a public
+image, and restoring both afterwards.
 
 ## Credits
 

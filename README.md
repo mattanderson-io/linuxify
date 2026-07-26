@@ -9,6 +9,8 @@ Transparently transform the macOS CLI into a fresh GNU/Linux CLI experience by
 
 Tested through macOS Big Sur (11), Monterey (12), Ventura (13), Sonoma (14), and Sequoia (15).
 
+![Colored GNU CLI on macOS](screenshots/colors.png)
+
 ## Install
 
 ```bash
